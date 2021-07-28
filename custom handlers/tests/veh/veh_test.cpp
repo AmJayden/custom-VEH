@@ -26,13 +26,26 @@ std::uint32_t custom_handler2(PEXCEPTION_POINTERS info)
 	return EXCEPTION_CONTINUE_EXECUTION;
 }
 
+void redir()
+{
+	std::cout << "cf redir\n";
+
+	RaiseException(0x1337, 0, 0, nullptr);
+}
+
 std::uint32_t custom_handler3(PEXCEPTION_POINTERS info)
 {
 	if (info->ExceptionRecord->ExceptionCode == 0xDEAD)
 	{
-		std::cout << "dead exception is handled, raising error\n";
-		info->ExceptionRecord->ExceptionCode = 0x90;
-		return EXCEPTION_EXECUTE_HANDLER;
+		std::cout << "dead exception is handled, starting redirection\n";
+		info->ContextRecord->Eip = reinterpret_cast<DWORD>(&redir);
+		return EXCEPTION_CONTINUE_EXECUTION;
+	}
+
+	if (info->ExceptionRecord->ExceptionCode == 0x1337)
+	{
+		std::cout << "cf redirection finished\n";
+		std::exit(0);
 	}
 
 	return EXCEPTION_CONTINUE_SEARCH;

@@ -1,6 +1,5 @@
 # custom-VEH
-custom vectored exception handlers for x86 and x64
-
+custom vectored exception handlers for x86 and x64.
 
 I'm sure this has been done before, and is likely well documented.
 
@@ -9,6 +8,11 @@ I didn't bother checking because my entire goal in this project was to see how e
 
 
 I had fun doing this and it only took about an hour, so I'm sure there's likely to be issues with either my documentation or code, let me know in the issues if you see any.
+
+# What is this?
+This is a library allowing you to create custom vectored exception handlers that're faster than normal ones, and run before any vanilla handlers do.
+
+These handlers are stored in a deque container as function pointers, outside of `LdrpVectorHandlerList`, being easier to manage and smaller while also being hard to manipulate outside of your process or dll.
 
 # Usage
 ## Defining a handler

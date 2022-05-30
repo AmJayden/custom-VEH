@@ -15,23 +15,26 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="custom_veh\custom_veh.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="custom_veh\ud.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="includes\MinHook.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="veh\custom_veh.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Library Include="includes\lib\libMinHook.x64.lib" />
+    <ClCompile Include="custom_veh\custom_veh.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
     <Library Include="includes\lib\libMinHook.x86.lib" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="veh\custom_veh.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="tests\veh\veh_test.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
+    <Library Include="includes\lib\libMinHook.x64.lib" />
   </ItemGroup>
 </Project>

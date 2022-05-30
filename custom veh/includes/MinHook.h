@@ -34,8 +34,6 @@
 
 #include <windows.h>
 
-#define MH_FAIL(x) (x != MH_OK)
-
 // MinHook Error Codes.
 typedef enum MH_STATUS
 {

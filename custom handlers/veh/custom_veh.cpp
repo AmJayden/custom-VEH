@@ -1,120 +1,74 @@
 #include "custom_veh.hpp"
+#include "ud.hpp"
 
 #include <MinHook.h>
-#include <exception>
+#include <stdexcept>
 
-// throw exception on function failure
-#define VEH_THROW_ON_FAIL 1
+#define VEH_SHOULD_THROW true
 
-#if VEH_THROW_ON_FAIL
-#define VEH_FAIL(msg) throw std::exception(msg)
+#if VEH_SHOULD_THROW
+#define VEH_EXCEPT( msg ) throw std::runtime_error( msg )
 #else
-#define VEH_FAIL(x) return false
+#define VEH_EXCEPT( msg ) return false
 #endif
 
-using namespace custom_handlers::veh;
-
-static auto find_in_deque(vectored_handler_t ptr)
+bool custom_veh::add_vectored_handler( vectored_handler_t handler, bool first )
 {
-	// no need to reference function pointers
-	for (auto i = 0u; i < g_vectored_handlers.size(); ++i)
-		if (g_vectored_handlers[i] == ptr)
-			return g_vectored_handlers.begin() + i;	
+	if ( std::find( g_vectored_handlers.begin( ), g_vectored_handlers.end( ), handler ) == g_vectored_handlers.end( ) )
+		return ( first ? g_vectored_handlers.push_front( handler ) : g_vectored_handlers.push_back( handler ) ), true;
 
-	return g_vectored_handlers.end();
+	VEH_EXCEPT( ud_xorstr_c( "handler already present" ) );
 }
 
-bool custom_handlers::veh::add_vectored_handler(vectored_handler_t func, bool first)
+bool custom_veh::remove_vectored_handler( vectored_handler_t handler )
 {
-	if (find_in_deque(func) == g_vectored_handlers.end())
-		return (first ? g_vectored_handlers.push_front(func) : g_vectored_handlers.push_back(func)), true;
-
-	VEH_FAIL("custom handler already exists!");
+	const auto it = std::find( g_vectored_handlers.begin( ), g_vectored_handlers.end( ), handler );
+	
+	if ( it != g_vectored_handlers.end( ) )
+		return g_vectored_handlers.erase( it ), true;
+	
+	VEH_EXCEPT( ud_xorstr_c( "handler not present" ) );
 }
 
-bool custom_handlers::veh::remove_vectored_handler(vectored_handler_t func)
+#pragma optimize( "", off )
+static bool( __fastcall* call_trampoline )( EXCEPTION_RECORD*, CONTEXT* );
+static bool __fastcall call_vectored_handlers( EXCEPTION_RECORD* record, CONTEXT* ctx )
 {
-	const auto& it = find_in_deque(func);
-	if (it == g_vectored_handlers.end())
-		VEH_FAIL("custom handler doesn't exist!");
-
-	return (g_vectored_handlers.erase(it)), true;
-}
-
-static bool(__fastcall* g_handler_trampoline)(PEXCEPTION_RECORD, PCONTEXT, std::uint32_t);
-static bool __fastcall call_handlers_hook(PEXCEPTION_RECORD record, PCONTEXT context, std::uint32_t base_idx)
-{
-	// prevent double executions of our handlers due to recursed calls
-	// will not run on continue handlers (which don't matter in this case anyway)
-	if (!base_idx)
+	for ( auto callback : custom_veh::g_vectored_handlers )
 	{
-		// call our vectored exception handlers before RtlpCallVectoredHandlers calls the ones inside of LdrpVectorHandlerList
-		for (auto f : g_vectored_handlers)
-		{
-			auto exception_info = EXCEPTION_POINTERS{ record, context };
-			const auto result = f(&exception_info);
-
-			// mimic real exception handler results
-			// if not continuing search and isn't EXCEPTION_CONTINUE_EXECUTION (-1) return false
-			// raising an exception, otherwise continue
-			if (result != EXCEPTION_CONTINUE_SEARCH)
-				return result == EXCEPTION_CONTINUE_EXECUTION;
-		}
+		EXCEPTION_POINTERS info{ record, ctx };
+		const auto status = callback( &info );
+			
+		if ( status != EXCEPTION_CONTINUE_SEARCH )
+			return status == EXCEPTION_CONTINUE_EXECUTION;
 	}
 
-	// run through original
-	return g_handler_trampoline(record, context, base_idx);
+	return call_trampoline( record, ctx );
 }
 
-template <class T>
-static inline std::uintptr_t calculate_rel(std::uintptr_t start, std::uint8_t sz, std::uint8_t off)
+bool custom_veh::start_veh( )
 {
-	return (start + sz + *reinterpret_cast<T*>(start + off));
-}
-
-bool custom_handlers::veh::start_custom_handler()
-{
-	// should never fail, but disallow warnings
-	const auto ntdll = GetModuleHandleA("ntdll.dll");
-
-	if (!ntdll)
-		VEH_FAIL("unable to retrieve ntdll handle");
-
-	const auto ki_dispatcher = reinterpret_cast<std::uintptr_t>(GetProcAddress(ntdll, "KiUserExceptionDispatcher"));
-
-	if (!ki_dispatcher)
-		VEH_FAIL("failed to get KiUserExceptionDispatcher");
-
-#ifdef _M_IX86
-	// SYSWOW64 ntdll
-	const auto exception_dispatch = calculate_rel<std::int32_t>(ki_dispatcher + 0x21, 5, 1);
+	const ud::module_t ntdll{ ud_xorstr( "ntdll.dll" ) };
+	
+#if defined( _M_IX86 )
+	const auto rtl_call_handlers = reinterpret_cast< void* >( *ntdll.find_pattern( ud_xorstr( "FC FE FF FF 8B FF 55 8B EC" ) ) + 4 );
 #else
-	// System32 ntdll
-	const auto exception_dispatch = calculate_rel<std::int32_t>(ki_dispatcher + 0x29, 5, 1);
+	const auto rtl_call_handlers = (ntdll.find_pattern< void* >( ud_xorstr( "40 55 56 57 41 54 41 55 41 56 41 57 48 81 EC D0" ) );
 #endif
 
-	if (!exception_dispatch)
-		VEH_FAIL("RtlDispatchException calculation yielded 0");
+	if ( !rtl_call_handlers )
+		VEH_EXCEPT( ud_xorstr_c( "rtl_call_handlers not found" ) );
 
-#ifdef _M_IX86
-	// SYSWOW64 ntdll
-	const auto call_vectored_handlers = calculate_rel<std::int32_t>(exception_dispatch + 0x6A, 5, 1);
-#else
-	// System32 ntdll
-	const auto call_vectored_handlers = calculate_rel<std::int32_t>(exception_dispatch + 0x61, 5, 1);
-#endif
+	if ( MH_Initialize( ) )
+		VEH_EXCEPT( ud_xorstr_c( "MH_Initialize failed" ) );
 
-	if (!call_vectored_handlers)
-		VEH_FAIL("RtlpCallVectoredHandlers calculation yielded 0");
+	if ( MH_CreateHook( rtl_call_handlers, &call_vectored_handlers, reinterpret_cast< void** >( &call_trampoline ) ) )
+		VEH_EXCEPT( ud_xorstr_c( "MH_CreateHook failed" ) );
 
-	if (MH_FAIL(MH_Initialize()))
-		VEH_FAIL("failure to initialize minhook");
-
-	if (MH_FAIL(MH_CreateHook(reinterpret_cast<void*>(call_vectored_handlers), &call_handlers_hook, reinterpret_cast<void**>(&g_handler_trampoline))))
-		VEH_FAIL("unable to create handler hook");
-
-	if (MH_FAIL(MH_EnableHook(reinterpret_cast<void*>(call_vectored_handlers))))
-		VEH_FAIL("unable to enable create handler hook");
+	if ( MH_EnableHook( rtl_call_handlers ) )
+		VEH_EXCEPT( ud_xorstr_c( "MH_EnableHook failed" ) );
 
 	return true;
 }
+
+#pragma optimize( "", on )

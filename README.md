@@ -29,10 +29,10 @@ std::uint32_t custom_handler(PEXCEPTION_POINTERS info)
 
 ## Initializing the custom handler
 ```cpp
-custom_handlers::veh::start_custom_handler();                   // call this exactly once in your program
-custom_handlers::veh::add_vectored_handler(&custom_handler);    // call this to add a handler
+custom_veh::start_custom_handler();                   // call this exactly once in your program
+custom_veh::add_vectored_handler(&custom_handler);    // call this to add a handler
 
-custom_handler::veh::remove_vectored_handler(&custom_handler);  // call this to remove a custom handler from execution
+custom_veh::remove_vectored_handler(&custom_handler);  // call this to remove a custom handler from execution
 ```
 
 # How it works

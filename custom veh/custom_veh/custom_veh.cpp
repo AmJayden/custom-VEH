@@ -53,7 +53,7 @@ bool custom_veh::start_veh( )
 #if defined( _M_IX86 )
 	const auto rtl_call_handlers = reinterpret_cast< void* >( *ntdll.find_pattern( ud_xorstr( "FC FE FF FF 8B FF 55 8B EC" ) ) + 4 );
 #else
-	const auto rtl_call_handlers = (ntdll.find_pattern< void* >( ud_xorstr( "40 55 56 57 41 54 41 55 41 56 41 57 48 81 EC D0" ) );
+	const auto rtl_call_handlers = *ntdll.find_pattern< void* >( ud_xorstr( "40 55 56 57 41 54 41 55 41 56 41 57 48 81 EC D0" ) );
 #endif
 
 	if ( !rtl_call_handlers )
